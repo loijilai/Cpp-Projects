@@ -1,0 +1,19 @@
+# Ignore all test file
+test*
+
+# Ignore all JPEG files
+/pictures
+*.jpg
+*.jpeg
+
+# Ignore all python files
+*.py
+
+# Ignore all compiled binary and output files
+*.out
+*.bmp
+*.o
+main
+
+# Ignore jpeg parser reference
+/ref

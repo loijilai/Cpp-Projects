@@ -1,0 +1,5 @@
+*.o
+BulletinBoard
+client
+server
+a.out
