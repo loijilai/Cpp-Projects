@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
                         poll_list[pollID].events = POLLOUT;
                         if(poll(&poll_list[pollID], 1, timeout) < 0)
                             ERR_EXIT("poll");
-                        poll_list[pollID].events = POLLIN;
+                        poll_list[pollID].events = POLLIN; // NOTE
                         
                         int ret;
                         if(lockNum == RECORD_NUM) {

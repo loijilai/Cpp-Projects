@@ -1,4 +1,4 @@
 # Cpp and C projects
-## Simple jpeg decoder
+## [Simple jpeg decoder](./my_jpeg/)
 
-## Bulletin System with I/O multiplexing
+## [Bulletin System with I/O multiplexing](./client-server)
