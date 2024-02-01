@@ -8,8 +8,8 @@
 #include <sys/types.h>
 typedef struct service{
     pid_t pid;
-    int read_fd;
-    int write_fd;
+    int read_child_fd;
+    int write_child_fd;
     struct service *prev;
     struct service *next;
     char name[MAX_SERVICE_NAME_LEN];

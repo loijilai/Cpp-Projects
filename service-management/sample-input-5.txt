@@ -1,0 +1,3 @@
+spawn Manager A
+spawn Manager B
+spawn Manager C

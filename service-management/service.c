@@ -14,6 +14,8 @@
 
 #define ERR_EXIT(s) perror(s), exit(errno);
 
+// define signals
+
 // Data structures
 static unsigned long secret;
 static char service_name[MAX_SERVICE_NAME_LEN];
@@ -29,9 +31,12 @@ void initialize_service_list() {
     tail->next = NULL;
 }
 
-void add_service(char *name) {
+void add_service(char *name, pid_t pid, int read_child_fd, int write_child_fd) {
     service *new_service = (service *)malloc(sizeof(service));
     strncpy(new_service->name, name, MAX_SERVICE_NAME_LEN);
+    new_service->pid = pid;
+    new_service->read_child_fd = read_child_fd;
+    new_service->write_child_fd = write_child_fd;
 
     new_service->prev = tail->prev;
     new_service->next = tail;
@@ -131,6 +136,31 @@ void parse_cmd(char *buf, char *cmd, char *parent_name, char *child_name) {
     }
 }
 
+bool request_destination_match(char *cmd, char *service_name, char *parent_name, char *child_name) {
+    if(strncmp(cmd, "spawn", strlen("spawn")) == 0)
+        return strncmp(service_name, parent_name, MAX_SERVICE_NAME_LEN) == 0;
+    else if(strncmp(cmd, "kill", strlen("kill")) == 0)
+        return strncmp(service_name, parent_name, MAX_SERVICE_NAME_LEN) == 0;
+    else if(strncmp(cmd, "exchange", strlen("exchange")) == 0)
+        return strncmp(service_name, parent_name, MAX_SERVICE_NAME_LEN) == 0 ||
+               strncmp(service_name, child_name, MAX_SERVICE_NAME_LEN) == 0;
+    else if(strncmp(cmd, "printall", strlen("printall")) == 0)
+        return false;
+    return false;
+}
+
+void clearCloseOnExec(int fd) {
+    int flags = fcntl(fd, F_GETFD);
+    if (flags == -1) {
+        ERR_EXIT("fcntl F_GETFD");
+    }
+
+    flags &= ~FD_CLOEXEC; // Clear FD_CLOEXEC bit
+
+    if (fcntl(fd, F_SETFD, flags) == -1) {
+        ERR_EXIT("fcntl F_SETFD");
+    }
+}
 
 int main(int argc, char *argv[]) {
     pid_t pid = getpid();        
@@ -150,8 +180,13 @@ int main(int argc, char *argv[]) {
     initialize_service_list();
     print_service_creation(service_name, pid, secret);
 
-    if(!is_manager())   
-        write(PARENT_WRITE_FD, "SIGSPAWN", strlen("SIGSPAWN")); // success signal
+    if(!is_manager()) {
+        int ret_bytes = write(PARENT_WRITE_FD, "SIGSPAWN", strlen("SIGSPAWN")); // success signal
+        if(ret_bytes < 0) {
+            fprintf(stderr, "ret_bytes: %d\n", ret_bytes);
+            ERR_EXIT("write");
+        }
+    }
 
 
     while(true) {
@@ -165,88 +200,86 @@ int main(int argc, char *argv[]) {
         char child_name[MAX_SERVICE_NAME_LEN];
 
         if(is_manager()) {
+            fprintf(stderr, "[%s] Waiting fgets...\n", service_name);
             fgets(buf, MAX_CMD_LEN, stdin);
+            buf[strcspn(buf, "\n")] = '\0';
         } else {
-            if(read(PARENT_READ_FD, buf, BUFFER_SIZE) < 0)
+            fprintf(stderr, "[%s] Waiting command...\n", service_name);
+            int ret_bytes = read(PARENT_READ_FD, buf, BUFFER_SIZE);
+            if(ret_bytes < 0) {
+                fprintf(stderr, "ret_bytes: %d\n", ret_bytes);
                 ERR_EXIT("read");
+            }
+            buf[ret_bytes] = '\0';
         }
 
-        buf[strcspn(buf, "\n")] = '\0';
         print_receive_command(service_name, buf);
         strcpy(tmp, buf); // copy buf to tmp, because strtok will modify buf
         parse_cmd(tmp, cmd, parent_name, child_name);
 
-        if(strncmp(service_name, parent_name, MAX_SERVICE_NAME_LEN) == 0) {
-            // destination match
+        if(request_destination_match(cmd, service_name, parent_name, child_name)) {
             if(strncmp(cmd, "spawn", strlen("spawn")) == 0) {
                 int parent_to_child_fd[2], child_to_parent_fd[2]; 
 
                 // Creating pipes
-                if(pipe(parent_to_child_fd) == -1)
-                    ERR_EXIT("pipe");
-                if(pipe(child_to_parent_fd) == -1)
-                    ERR_EXIT("pipe");
+                if (pipe2(parent_to_child_fd, O_CLOEXEC) == -1 || pipe2(child_to_parent_fd, O_CLOEXEC) == -1) {
+                    ERR_EXIT("pipe2")
+                }
 
                 pid_t pid = fork();
                 if(pid == -1)
                     ERR_EXIT("fork");
 
                 if(pid == 0) {
-                    // child process
-                    // close unused end of the pipe
-                    close(parent_to_child_fd[1]); // close write end of parent_to_child_fd, because child only reads from it
-                    close(child_to_parent_fd[0]); // close read end of child_to_parent_fd, because child only writes to it
-
                     // duplication of file descriptors
+                    // The close-on-exec flag set on a file descriptor is not copied by dup2()
                     dup2(parent_to_child_fd[0], PARENT_READ_FD);
                     dup2(child_to_parent_fd[1], PARENT_WRITE_FD);
+                    // but for clarity, we set the close-on-exec flag explicitly
+                    clearCloseOnExec(PARENT_READ_FD);
+                    clearCloseOnExec(PARENT_WRITE_FD);
 
                     // execute service
                     execl("./service", "service", child_name, NULL);
                 } else {
-                    // parent process
                     // close unused end of the pipe
                     close(parent_to_child_fd[0]);
                     close(child_to_parent_fd[1]);
 
                     // wait for the child to send the creation message through pipe
+                    fprintf(stderr, "[%s] Waiting for the child to send the creation message\n", service_name);
                     read(child_to_parent_fd[0], tmp, BUFFER_SIZE);
                     if(strncmp(tmp, "SIGSPAWN", strlen("SIGSPAWN")) != 0)
                         ERR_EXIT("SIGSPAWN");
                     
                     // add new service to the list
-                    add_service(child_name);
+                    add_service(child_name, pid, child_to_parent_fd[0], parent_to_child_fd[1]);
 
                     // output spawn message
                     print_spawn(service_name, child_name);
                 }
             } else if(strncmp(cmd, "kill", strlen("kill")) == 0) {
                 // kill all children
-                write(PARENT_WRITE_FD, "SIGKILL", strlen("SIGKILL")); // success signal
-                print_kill(service_name, 0);
-                exit(0);
             } else if(strncmp(cmd, "exchange", strlen("exchange")) == 0) {
                 // exchange secret with child
-                write(PARENT_WRITE_FD, "SIGEXCHANGE", strlen("SIGEXCHANGE")); // success signal
-                print_exchange(service_name, child_name);
-                unsigned long child_secret;
-                read(PARENT_READ_FD, &child_secret, sizeof(unsigned long));
-                print_acquire_secret(service_name, child_name, child_secret);
-                if(child_secret > secret)
-                    secret = child_secret;
-            } else if (strncmp(cmd, "printall", strlen("printall")) == 0){
-                fprintf(stderr, "====================\n");
-                fprintf(stderr, "Service Name: %s\n", service_name);
-                print_service_list();
-                // entering child service
-                
-            } else {
-                fprintf(stderr, "%s\n", "Invalid command");
             }
+                
         } else {
             // destination not match: forward command
-            print_not_exist(parent_name);
-            continue;
+            if (strncmp(cmd, "printall", strlen("printall")) == 0){
+                fprintf(stderr, "===== Service Name: %s =====\n", service_name);
+                print_service_list();
+                fprintf(stderr, "=============================\n");
+                // invoke child service
+                for(service *cur = head->next; cur != tail; cur = cur->next) {
+                    write(cur->write_child_fd, "printall", strlen("printall"));
+                    read(cur->read_child_fd, tmp, BUFFER_SIZE);
+                    if(strncmp(tmp, "SIGPRINTALL\n", strlen("SIGPRINTALL\n")) != 0)
+                        ERR_EXIT("SIGPRINTALL");
+                }
+                // notify parent that I've finished the command
+                write(PARENT_WRITE_FD, "SIGPRINTALL\n", strlen("SIGPRINTALL\n"));
+            }
         }
     }
 
