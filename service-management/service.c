@@ -82,10 +82,12 @@ void print_not_exist(char *service_name) {
 
 void print_receive_command(char *service_name, char *cmd) {
     printf("%s has received %s\n", service_name, cmd);
+    // fprintf(stderr, "[%s] has received %s\n", service_name, cmd);
 }
 
 void print_spawn(char *parent_name, char *child_name) {
     printf("%s has spawned a new service %s\n", parent_name, child_name);
+    // fprintf(stderr, "[%s] has spawned a new service %s\n", parent_name, child_name);
 }
 
 void print_kill(char *target_name, int decendents_num) {
@@ -102,6 +104,7 @@ void print_exchange(char *service_a, char *service_b) {
 
 void print_service_creation(char *service_name, pid_t pid, unsigned long secret) {
     printf("%s has been spawned, pid: %d, secret: %lu\n", service_name, pid, secret);
+    // fprintf(stderr, "[%s] has been spawned, pid: %d, secret: %lu\n", service_name, pid, secret);
 }
 
 void parse_cmd(char *buf, char *cmd, char *parent_name, char *child_name) {
@@ -247,7 +250,7 @@ int main(int argc, char *argv[]) {
                     close(child_to_parent_fd[1]);
 
                     // wait for the child to send the creation message through pipe
-                    fprintf(stderr, "[%s] Waiting for the child to send the creation message\n", service_name);
+                    // fprintf(stderr, "[%s] Waiting for the child to send the creation message\n", service_name);
                     read(child_to_parent_fd[0], tmp, BUFFER_SIZE);
                     if(strncmp(tmp, "SIGSPAWN", strlen("SIGSPAWN")) != 0)
                         ERR_EXIT("SIGSPAWN");
@@ -256,7 +259,10 @@ int main(int argc, char *argv[]) {
                     add_service(child_name, pid, child_to_parent_fd[0], parent_to_child_fd[1]);
 
                     // output spawn message
-                    print_spawn(service_name, child_name);
+                    if(is_manager())
+                        print_spawn(service_name, child_name);
+                    else
+                        write(PARENT_WRITE_FD, "SIGSPAWN", strlen("SIGSPAWN")); // success signal
                 }
             } else if(strncmp(cmd, "kill", strlen("kill")) == 0) {
                 // kill all children
@@ -266,19 +272,41 @@ int main(int argc, char *argv[]) {
                 
         } else {
             // destination not match: forward command
-            if (strncmp(cmd, "printall", strlen("printall")) == 0){
-                fprintf(stderr, "===== Service Name: %s =====\n", service_name);
-                print_service_list();
-                fprintf(stderr, "=============================\n");
-                // invoke child service
-                for(service *cur = head->next; cur != tail; cur = cur->next) {
-                    write(cur->write_child_fd, "printall", strlen("printall"));
-                    read(cur->read_child_fd, tmp, BUFFER_SIZE);
-                    if(strncmp(tmp, "SIGPRINTALL\n", strlen("SIGPRINTALL\n")) != 0)
-                        ERR_EXIT("SIGPRINTALL");
+            // if (strncmp(cmd, "printall", strlen("printall")) == 0) {
+            //     fprintf(stderr, "===== Service Name: %s =====\n", service_name);
+            //     print_service_list();
+            //     fprintf(stderr, "=============================\n");
+            //     // invoke child service
+            //     for(service *cur = head->next; cur != tail; cur = cur->next) {
+            //         write(cur->write_child_fd, "printall", strlen("printall"));
+            //         read(cur->read_child_fd, tmp, BUFFER_SIZE);
+            //         if(strncmp(tmp, "SIGPRINTALL\n", strlen("SIGPRINTALL\n")) != 0)
+            //             ERR_EXIT("SIGPRINTALL");
+            //     }
+            //     // notify parent that I've finished the command
+            //     write(PARENT_WRITE_FD, "SIGPRINTALL\n", strlen("SIGPRINTALL\n"));
+            // }
+            // invoke child service
+            bool found = false;
+            for(service *cur = head->next; cur != tail; cur = cur->next) {
+                fprintf(stderr, "[%s] Forwarding command to [%s]\n", service_name, cur->name);
+                write(cur->write_child_fd, buf, strlen(buf));
+                read(cur->read_child_fd, tmp, BUFFER_SIZE);
+                if(strncmp(tmp, "SIGSPAWN", strlen("SIGSPAWN")) == 0 ||
+                   strncmp(tmp, "SIGKILL", strlen("SIGKILL")) == 0 ||
+                   strncmp(tmp, "SIGEXCHANGE", strlen("SIGEXCHANGE")) == 0) {
+                    found = true;
+                    break;
                 }
-                // notify parent that I've finished the command
-                write(PARENT_WRITE_FD, "SIGPRINTALL\n", strlen("SIGPRINTALL\n"));
+            }
+            // notify parent that I've finished the command
+            if(found) {
+                if(is_manager())
+                    print_spawn(parent_name, child_name);
+                else
+                    write(PARENT_WRITE_FD, tmp, sizeof(tmp));
+            } else {
+                write(PARENT_WRITE_FD, "NOTFOUND", strlen("NOTFOUND"));
             }
         }
     }
