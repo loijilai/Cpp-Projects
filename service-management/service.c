@@ -132,7 +132,7 @@ void parse_cmd(char *buf, char *cmd, char *parent_name, char *child_name) {
             return;
         }
         else {
-            fprintf(stderr, "%s\n", "Invalid command");
+            fprintf(stderr, "%s: %s\n", "Invalid command", cmd);
         }
     } else {
         ERR_EXIT("strtok");
@@ -306,7 +306,10 @@ int main(int argc, char *argv[]) {
                 else
                     write(PARENT_WRITE_FD, tmp, sizeof(tmp));
             } else {
-                write(PARENT_WRITE_FD, "NOTFOUND", strlen("NOTFOUND"));
+                if(is_manager())
+                    print_not_exist(parent_name);
+                else
+                    write(PARENT_WRITE_FD, "NOTFOUND", strlen("NOTFOUND"));
             }
         }
     }
