@@ -220,6 +220,7 @@ int main(int argc, char *argv[]) {
         strcpy(tmp, buf); // copy buf to tmp, because strtok will modify buf
         parse_cmd(tmp, cmd, parent_name, child_name);
 
+        bool found = false;
         if(request_destination_match(cmd, service_name, parent_name, child_name)) {
             if(strncmp(cmd, "spawn", strlen("spawn")) == 0) {
                 int parent_to_child_fd[2], child_to_parent_fd[2]; 
@@ -256,13 +257,9 @@ int main(int argc, char *argv[]) {
                         ERR_EXIT("SIGSPAWN");
                     
                     // add new service to the list
+                    found = true;
                     add_service(child_name, pid, child_to_parent_fd[0], parent_to_child_fd[1]);
 
-                    // output spawn message
-                    if(is_manager())
-                        print_spawn(service_name, child_name);
-                    else
-                        write(PARENT_WRITE_FD, "SIGSPAWN", strlen("SIGSPAWN")); // success signal
                 }
             } else if(strncmp(cmd, "kill", strlen("kill")) == 0) {
                 // kill all children
@@ -287,7 +284,6 @@ int main(int argc, char *argv[]) {
             //     write(PARENT_WRITE_FD, "SIGPRINTALL\n", strlen("SIGPRINTALL\n"));
             // }
             // invoke child service
-            bool found = false;
             for(service *cur = head->next; cur != tail; cur = cur->next) {
                 fprintf(stderr, "[%s] Forwarding command to [%s]\n", service_name, cur->name);
                 write(cur->write_child_fd, buf, strlen(buf));
@@ -299,7 +295,8 @@ int main(int argc, char *argv[]) {
                     break;
                 }
             }
-            // notify parent that I've finished the command
+        }
+        if(strncmp(cmd, "spawn", strlen("spawn")) == 0) {
             if(found) {
                 if(is_manager())
                     print_spawn(parent_name, child_name);
