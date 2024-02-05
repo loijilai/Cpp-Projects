@@ -254,6 +254,8 @@ int main(int argc, char *argv[]) {
         char cmd[10];
         char parent_name[MAX_SERVICE_NAME_LEN];
         char child_name[MAX_SERVICE_NAME_LEN];
+        // initialized when exchange command is received (line 284), and used when exchange command hit target(402)
+        // this variable is needed because instruction "read [service_name]" cannot tell who is service_a and who is service_b
         ex_service exchange_service[2];
         int exchange_target_left;
 
@@ -443,10 +445,16 @@ int main(int argc, char *argv[]) {
                         if(read(exchange_service[i].fifo_read_fd, &secret, sizeof(secret)) == -1)
                             ERR_EXIT("read secret from FIFO");
     
-                        if(i == 0)
+                        if(i == 0) {
+                            // NOTE: after read secret from fifo, close the fds
+                            close(exchange_service[0].fifo_read_fd);
+                            close(exchange_service[0].fifo_write_fd);
                             print_acquire_secret(exchange_service[0].name, exchange_service[1].name, secret);
-                        else // i == 1
+                        } else { // i == 1
+                            close(exchange_service[1].fifo_read_fd);
+                            close(exchange_service[1].fifo_write_fd);
                             print_acquire_secret(exchange_service[1].name, exchange_service[0].name, secret);
+                        }
                     }
                 }
                 read_found = true;
@@ -528,6 +536,8 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+
+        // This section handles output to terminal or write signal to parent
         if(strncmp(cmd, "spawn", strlen("spawn")) == 0) {
             if(spawn_found) {
                 if(is_manager())
@@ -575,7 +585,6 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "[%s] switch into exchange_phase: %d\n", service_name, exchange_phase);
                     if(exchange_phase > 2) {
                         // reset the exchange_phase and unlink FIFO
-                        // TODO: unlink FIFO
                         print_exchange(exchange_service[0].name, exchange_service[1].name);
                         exchange_phase = 0;
                         fprintf(stderr, "[%s] exchange complete with exchange_phase: %d\n", service_name, exchange_phase);
@@ -583,6 +592,19 @@ int main(int argc, char *argv[]) {
                         unlink(fifo_b_to_a);
                         fprintf(stderr, "[%s] unlink FIFO %s\n", service_name, fifo_a_to_b);
                         fprintf(stderr, "[%s] unlink FIFO %s\n", service_name, fifo_b_to_a);
+
+                        // only close your own fds
+                        if(strncmp(service_name, exchange_service[0].name, MAX_SERVICE_NAME_LEN) == 0) {
+                            close(exchange_service[0].fifo_read_fd);
+                            close(exchange_service[0].fifo_write_fd);
+                            fprintf(stderr, "[%s] unlink FIFO %s\n", service_name, fifo_a_to_b);
+                            fprintf(stderr, "[%s] unlink FIFO %s\n", service_name, fifo_b_to_a);
+                        } else {
+                            close(exchange_service[1].fifo_read_fd);
+                            close(exchange_service[1].fifo_write_fd);
+                            fprintf(stderr, "[%s] unlink FIFO %s\n", service_name, fifo_a_to_b);
+                            fprintf(stderr, "[%s] unlink FIFO %s\n", service_name, fifo_b_to_a);
+                        }
                     }
 
                 } else {
