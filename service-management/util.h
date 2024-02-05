@@ -4,6 +4,7 @@
 #define MAX_FIFO_NAME_LEN 64
 #define MAX_SERVICE_NAME_LEN 16
 #define MAX_CMD_LEN 128
+#define MAX_FIFO_NAME_LEN 64
 #define BUFFER_SIZE 1024
 #include <sys/types.h>
 typedef struct service{

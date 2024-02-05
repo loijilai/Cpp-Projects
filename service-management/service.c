@@ -134,7 +134,7 @@ void print_service_creation(char *service_name, pid_t pid, unsigned long secret)
     // fprintf(stderr, "[%s] has been spawned, pid: %d, secret: %lu\n", service_name, pid, secret);
 }
 
-void parse_cmd(char *buf, char *cmd, char *parent_name, char *child_name) {
+void parse_cmd(char *buf, char *cmd, char *parent_name, char *child_name, int *exchange_target_left) {
     char *token;
     token = strtok(buf, " ");
     if(token != NULL) {
@@ -144,19 +144,34 @@ void parse_cmd(char *buf, char *cmd, char *parent_name, char *child_name) {
             strncpy(parent_name, token, MAX_SERVICE_NAME_LEN);
             token = strtok(NULL, " ");
             strncpy(child_name, token, MAX_SERVICE_NAME_LEN);
+            *exchange_target_left = -1;
         }
         else if(strncmp(cmd, "kill", strlen("kill")) == 0) {
             token = strtok(NULL, " ");
             strncpy(parent_name, token, MAX_SERVICE_NAME_LEN);
+            child_name[0] = '\0';
+            *exchange_target_left = -1;
         }
         else if(strncmp(cmd, "exchange", strlen("exchange")) == 0) {
+            fprintf(stderr, "cmd: %s\n", cmd);
             token = strtok(NULL, " ");
             strncpy(parent_name, token, MAX_SERVICE_NAME_LEN);
+            fprintf(stderr, "parent_name: %s\n", parent_name);
             token = strtok(NULL, " ");
             strncpy(child_name, token, MAX_SERVICE_NAME_LEN);
+            fprintf(stderr, "child_name: %s\n", child_name);
+
+            if(is_manager()) {
+                *exchange_target_left = 2;
+            } else {
+                token = strtok(NULL, " ");
+                *exchange_target_left = atoi(token);
+            }
+            fprintf(stderr, "exchange_target_left: %d\n", *exchange_target_left);
         }
         else {
             fprintf(stderr, "%s: %s\n", "Invalid command", cmd);
+            ERR_EXIT("parse_cmd");
         }
     } else {
         ERR_EXIT("strtok");
@@ -223,6 +238,7 @@ int main(int argc, char *argv[]) {
         char cmd[10];
         char parent_name[MAX_SERVICE_NAME_LEN];
         char child_name[MAX_SERVICE_NAME_LEN];
+        int exchange_target_left;
 
         if(is_manager()) {
             fprintf(stderr, "[%s] Waiting fgets...\n", service_name);
@@ -230,7 +246,7 @@ int main(int argc, char *argv[]) {
             full_command[strcspn(full_command, "\n")] = '\0';
         } else {
             fprintf(stderr, "[%s] Waiting command...\n", service_name);
-            int ret_bytes = read(PARENT_READ_FD, full_command, BUFFER_SIZE);
+            int ret_bytes = read(PARENT_READ_FD, full_command, MAX_CMD_LEN);
             if(ret_bytes < 0) {
                 fprintf(stderr, "ret_bytes: %d\n", ret_bytes);
                 ERR_EXIT("read");
@@ -242,7 +258,27 @@ int main(int argc, char *argv[]) {
         print_receive_command(service_name, full_command);
         fprintf(stderr, "---------------end-----------------\n");
         strcpy(tmp, full_command); // copy full_command to tmp, because strtok will modify full_command
-        parse_cmd(tmp, cmd, parent_name, child_name);
+        parse_cmd(tmp, cmd, parent_name, child_name, &exchange_target_left);
+        
+        // exchange pre-process
+        if(strncmp(tmp, "exchange", strlen("exchange")) == 0) {
+            if(is_manager()) {
+                // make FIFO
+                const char* service_a = parent_name;
+                const char* service_b = child_name;
+                char fifo_a_to_b[MAX_FIFO_NAME_LEN], fifo_b_to_a[MAX_FIFO_NAME_LEN];
+
+                // Generate FIFO names
+                snprintf(fifo_a_to_b, MAX_FIFO_NAME_LEN, "%s_to_%s.fifo", service_a, service_b);
+                snprintf(fifo_b_to_a, MAX_FIFO_NAME_LEN, "%s_to_%s.fifo", service_b, service_a);
+                fprintf(stderr, "[%s] fifo_a_to_b: %s\n", service_name, fifo_a_to_b);
+                fprintf(stderr, "[%s] fifo_b_to_a: %s\n", service_name, fifo_b_to_a);
+                if (mkfifo(fifo_a_to_b, 0666) == -1 || mkfifo(fifo_b_to_a, 0666) == -1) {
+                    ERR_EXIT("mkfifo");
+                }
+            }
+        }
+
 
         bool spawn_found = false;
         bool kill_found = false;
@@ -330,6 +366,10 @@ int main(int argc, char *argv[]) {
                 exit(0);
             } else if(strncmp(cmd, "exchange", strlen("exchange")) == 0) {
                 // exchange secret with child
+                // write secret to FIFO
+                // target hit, so exchange_target_left-1 and send exchange command to child
+                // if exchange_target_left == 0, then do not pass down the command
+                // send signal to parent to notify how many exchange_target_left left
             }
                 
         } else {
@@ -373,6 +413,8 @@ int main(int argc, char *argv[]) {
                         kill_found = false;
                     }
                 }
+            } else if(strncmp(cmd, "exchange", strlen("exchange")) == 0) {
+                // TODO: forward exchange command to children with exchange_target_left-1
             }
         }
         if(strncmp(cmd, "spawn", strlen("spawn")) == 0) {
