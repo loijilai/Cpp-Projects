@@ -239,9 +239,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // indicate the phase of exchange, 0: find exchange target and write data into the fifo, 
+    // this variable is only used by manager indicate the phase of exchange
+    // 0: find exchange target and write data into the fifo, 
     // 1: service_a read data from the fifo, 2: service_b read data from the fifo
-    // this variable is only used by manager
     int exchange_phase = 0; 
     // FIFO names is used when unlink
     char fifo_a_to_b[MAX_FIFO_NAME_LEN], fifo_b_to_a[MAX_FIFO_NAME_LEN];
@@ -259,6 +259,7 @@ int main(int argc, char *argv[]) {
         ex_service exchange_service[2];
         int exchange_target_left;
 
+        /********* Section 1: Get command from stdin or parent *********/
         if(exchange_phase && is_manager()) {
             snprintf(full_command, BUFFER_SIZE, "read %s", exchange_service[exchange_phase-1].name);
         }
@@ -281,6 +282,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "---------------end-----------------\n");
         strcpy(tmp, full_command); // copy full_command to tmp, because strtok will modify full_command
         parse_cmd(tmp, cmd, parent_name, child_name, &exchange_target_left);
+        /************************ End Section 1 **********************/
         
         if(strncmp(tmp, "exchange", strlen("exchange")) == 0) {
             strncpy(exchange_service[0].name, parent_name, MAX_SERVICE_NAME_LEN);
@@ -306,7 +308,9 @@ int main(int argc, char *argv[]) {
         char ssignal_from_child[BUFFER_SIZE];
         char esignal_from_child[BUFFER_SIZE];
         char rsignal_from_child[BUFFER_SIZE];
+        /********* Section 2: Main logic: destination match or not *********/
         if(request_destination_match(cmd, service_name, parent_name, child_name)) {
+            // destination match: execute command
             if(strncmp(cmd, "spawn", strlen("spawn")) == 0) {
                 int parent_to_child_fd[2], child_to_parent_fd[2]; 
 
@@ -355,7 +359,6 @@ int main(int argc, char *argv[]) {
                 for(service *cur = head->next; cur != tail; cur = cur->next) {
                     snprintf(kill_child_cmd, BUFFER_SIZE, "kill %s NoPrint", cur->name);
                     write(cur->write_child_fd, kill_child_cmd, strlen(kill_child_cmd)+1);
-                    fprintf(stderr, "[%s] Waiting [%s] killed...\n", service_name, cur->name); 
                     read(cur->read_child_fd, ksignal_from_child, BUFFER_SIZE);
                     if(strncmp(ksignal_from_child, "SIGKILL", strlen("SIGKILL")) != 0) {
                         fprintf(stderr, "[%s] ksignal_from_child: %s\n", service_name, ksignal_from_child);
@@ -375,16 +378,15 @@ int main(int argc, char *argv[]) {
                 }
                 // clean linked list (close all fds and free memory)
                 clear_service_list();
-                // send SIGKILL to parent
-                snprintf(ksignal_to_parent, BUFFER_SIZE, "SIGKILL-%d", killed_num);
-                int len = strlen(ksignal_to_parent);
 
                 if(is_manager())
                     print_kill(service_name, killed_num);
-                else
-                    write(PARENT_WRITE_FD, ksignal_to_parent, len+1);
+                else {
+                    // send SIGKILL to parent
+                    snprintf(ksignal_to_parent, BUFFER_SIZE, "SIGKILL-%d", killed_num);
+                    write(PARENT_WRITE_FD, ksignal_to_parent, strlen(ksignal_to_parent)+1);
+                }
 
-                fprintf(stderr, "[%s] Before exit: %s\n", service_name, ksignal_to_parent);
                 exit(0);
             } else if(strncmp(cmd, "exchange", strlen("exchange")) == 0) {
                 fprintf(stderr, "[%s] target hit, exchange_target_left: %d\n", service_name, exchange_target_left-1);
@@ -420,9 +422,8 @@ int main(int argc, char *argv[]) {
                     char exchange_cmd[MAX_CMD_LEN];
                     snprintf(exchange_cmd, MAX_CMD_LEN, "exchange %s %s %d", exchange_service[0].name, exchange_service[1].name, exchange_target_left);
                     for(service *cur = head->next; cur != tail; cur = cur->next) {
-                        write(cur->write_child_fd, exchange_cmd, strlen(exchange_cmd)+1);
                         fprintf(stderr, "[%s] Forwarding %s to [%s]\n", service_name, exchange_cmd, cur->name);
-                        // read signal from child
+                        write(cur->write_child_fd, exchange_cmd, strlen(exchange_cmd)+1);
                         read(cur->read_child_fd, esignal_from_child, BUFFER_SIZE);
                         fprintf(stderr, "[%s] receive esignal_from_child from %s: %s\n", service_name, cur->name, esignal_from_child);
                         // extract exchange_target_left from esignal_from_child and update exchange_target_left
@@ -536,8 +537,9 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+        /************************ End Section 2 **********************/
 
-        // This section handles output to terminal or write signal to parent
+        /**** Section 3: Print output to terminal or write signal to parent ****/
         if(strncmp(cmd, "spawn", strlen("spawn")) == 0) {
             if(spawn_found) {
                 if(is_manager())
@@ -614,6 +616,7 @@ int main(int argc, char *argv[]) {
                 write(PARENT_WRITE_FD, "NOTFOUND", strlen("NOTFOUND")+1);
             }
         }
+        /************************ End Section 3 **********************/
     }
 
     return 0;
