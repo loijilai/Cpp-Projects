@@ -16,3 +16,8 @@ typedef struct service{
     char name[MAX_SERVICE_NAME_LEN];
 } service;
 
+typedef struct ex_service{
+    int fifo_read_fd;
+    int fifo_write_fd;
+    char name[MAX_SERVICE_NAME_LEN];
+} ex_service;

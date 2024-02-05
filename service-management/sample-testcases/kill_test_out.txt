@@ -1,0 +1,29 @@
+Manager has been spawned, pid: 2098, secret: 1851542556
+Manager has received spawn Manager A
+A has been spawned, pid: 2151, secret: 761592912
+Manager has spawned a new service A
+Manager has received spawn A B
+A has received spawn A B
+B has been spawned, pid: 2168, secret: 2037059738
+A has spawned a new service B
+Manager has received spawn B C
+A has received spawn B C
+B has received spawn B C
+C has been spawned, pid: 2233, secret: 522309709
+B has spawned a new service C
+Manager has received spawn B D
+A has received spawn B D
+B has received spawn B D
+D has been spawned, pid: 2244, secret: 1472053557
+B has spawned a new service D
+Manager has received spawn B E
+A has received spawn B E
+B has received spawn B E
+E has been spawned, pid: 2251, secret: 1488288820
+B has spawned a new service E
+Manager has received kill B
+A has received kill B
+B has received kill B
+B and 3 child services are killed
+Manager has received kill Manager
+Manager and 1 child services are killed

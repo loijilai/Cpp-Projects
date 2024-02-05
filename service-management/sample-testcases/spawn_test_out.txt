@@ -1,0 +1,63 @@
+Manager has been spawned, pid: 6803, secret: 85887968
+Manager has received spawn Manager A
+A has been spawned, pid: 6823, secret: 1509203495
+Manager has spawned a new service A
+Manager has received spawn Manager B
+B has been spawned, pid: 6882, secret: 746690955
+Manager has spawned a new service B
+Manager has received spawn Manager C
+C has been spawned, pid: 6887, secret: 302080349
+Manager has spawned a new service C
+Manager has received spawn A D
+A has received spawn A D
+D has been spawned, pid: 6940, secret: 290559341
+A has spawned a new service D
+Manager has received spawn A E
+A has received spawn A E
+E has been spawned, pid: 6941, secret: 2127185887
+A has spawned a new service E
+Manager has received spawn B F
+A has received spawn B F
+D has received spawn B F
+E has received spawn B F
+B has received spawn B F
+F has been spawned, pid: 6946, secret: 1683728952
+B has spawned a new service F
+Manager has received spawn B G
+A has received spawn B G
+D has received spawn B G
+E has received spawn B G
+B has received spawn B G
+G has been spawned, pid: 6947, secret: 319246902
+B has spawned a new service G
+Manager has received spawn C H
+A has received spawn C H
+D has received spawn C H
+E has received spawn C H
+B has received spawn C H
+F has received spawn C H
+G has received spawn C H
+C has received spawn C H
+H has been spawned, pid: 6989, secret: 1490598873
+C has spawned a new service H
+Manager has received spawn C I
+A has received spawn C I
+D has received spawn C I
+E has received spawn C I
+B has received spawn C I
+F has received spawn C I
+G has received spawn C I
+C has received spawn C I
+I has been spawned, pid: 6994, secret: 2116533749
+C has spawned a new service I
+Manager has received spawn Z T
+A has received spawn Z T
+D has received spawn Z T
+E has received spawn Z T
+B has received spawn Z T
+F has received spawn Z T
+G has received spawn Z T
+C has received spawn Z T
+H has received spawn Z T
+I has received spawn Z T
+Z doesn't exist

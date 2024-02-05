@@ -10,3 +10,4 @@ A simple server application capable of handling `post`(posting content onto the 
 Maintain a service tree consists of processes. Manager get user input from `stdin`, and act as the orchestrator to pass user's request to its children.
 * `fork`, `exec` to create service
 * `pipe`, `FIFO` to communicate between services
+* Note: The `judge.py` is contributed by kenlina

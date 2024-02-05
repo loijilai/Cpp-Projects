@@ -1,0 +1,9 @@
+spawn Manager A
+spawn A B
+spawn B C
+spawn B D
+spawn B E
+kill B
+kill Manager
+
+# this test case test for kill
