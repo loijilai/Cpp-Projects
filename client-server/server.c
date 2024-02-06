@@ -311,8 +311,12 @@ void writeBoard(int pollID, FILE* board) {
         memcpy(&rec, requestP[poll_list[pollID].fd].buf, sizeof(record));
         printf("[Log] Receive post from %s\n", rec.From);
         fprintf(stderr, "[Log] Receive post content %s\n", rec.Content);
-        fseek(board, recordIndex*sizeof(record), SEEK_SET);
-        fwrite(&rec, sizeof(rec), 1, board);
+
+        // Note: Do not use fseek + fwrite, use pwrite instead to prevent race condition
+        // fseek(board, recordIndex*sizeof(record), SEEK_SET);
+        // fwrite(&rec, sizeof(rec), 1, board);
+        pwrite(fileno(board), &rec, sizeof(rec), recordIndex*sizeof(record));
+
         fflush(board);
         unlock_record(fileno(board), recordIndex);
     }
