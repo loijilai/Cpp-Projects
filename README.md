@@ -11,3 +11,7 @@ Maintain a service tree consists of processes. Manager get user input from `stdi
 * `fork`, `exec` to create service
 * `pipe`, `FIFO` to communicate between services
 * Note: The `judge.py` is contributed by kenlina
+
+## [Signal-driven User-level Thread Coroutine](./signal-driven-coroutine/)
+Implement a signal-driven scheduling mechanism to context switch between threads of execution. The thread here is user-level threads, we do not use `pthread` library here. Use `setjmp`, `longjmp` to context switch between user-level threads mimicking a coroutine behavior.
+* Coroutines are computer program components that allow execution to be suspended and resumed, generalizing subroutines for cooperative multitasking.

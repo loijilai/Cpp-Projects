@@ -1,0 +1,14 @@
+0 fibonacci
+1 factorial
+0 1
+0 1
+caught SIGTSTP
+1 1
+caught SIGALRM
+0 2
+caught SIGTSTP
+1 2
+1 6
+0 3
+caught SIGTSTP
+0 5
