@@ -6,6 +6,11 @@ A simple server application capable of handling `post`(posting content onto the 
 * Using `poll` to enable I/O multiplexing in server.c
 * Using filelock to prevent race condition
 
+## [Event-driven server](./event-driven-server/)
+An improvement of the bullentin system above.
+* All read and write to client is checked after `poll`.
+* Emphasize on how to manage state of the client in the event-driven server
+
 ## [Service Management System](./service-management/)
 Maintain a service tree consists of processes. Manager get user input from `stdin`, and act as the orchestrator to pass user's request to its children.
 * `fork`, `exec` to create service
