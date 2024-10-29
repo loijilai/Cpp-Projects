@@ -1,0 +1,5 @@
+read_server
+write_server
+/public
+/.vscode
+*.o
